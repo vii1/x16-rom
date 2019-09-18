@@ -1,58 +1,58 @@
-	.byt "TAB",$a8
+	.byt "TAB",'('+$80
 tabtk	=$a3
-	.byt "T",$cf
+	.byt "T",'O'+$80
 totk	=$a4
-	.byt "F",$ce
+	.byt "F",'N'+$80
 fntk	=$a5
-	.byt "SPC",$a8
+	.byt "SPC",'('+$80
 spctk	=$a6
-	.byt "THE",$ce
+	.byt "THE",'N'+$80
 thentk	=$a7
-	.byt "NO",$d4
+	.byt "NO",'T'+$80
 nottk	=$a8
-	.byt "STE",$d0
+	.byt "STE",'P'+$80
 steptk	=$a9
-	.byt $ab
+	.byt '+'+$80
 plustk	=$aa
-	.byt $ad
+	.byt '-'+$80
 minutk	=$ab
-	.byt $aa
-	.byt $af
-	.byt $de
-	.byt "AN",$c4
-	.byt "O",$d2
-	.byt 190
+	.byt '*'+$80
+	.byt '/'+$80
+	.byt '^'+$80
+	.byt "AN",'D'+$80
+	.byt "O",'R'+$80
+	.byt '>'+$80
 greatk	=$b1
-	.byt $bd
+	.byt '='+$80
 equltk	=$b2
-	.byt 188
+	.byt '<'+$80
 lesstk	=$b3
-	.byt "SG",$ce
+	.byt "SG",'N'+$80
 onefun	=$b4
-	.byt "IN",$d4
-	.byt "AB",$d3
-	.byt "US",$d2
-	.byt "FR",$c5
-	.byt "PO",$d3
-	.byt "SQ",$d2
-	.byt "RN",$c4
-	.byt "LO",$c7
-	.byt "EX",$d0
-	.byt "CO",$d3
-	.byt "SI",$ce
-	.byt "TA",$ce
-	.byt "AT",$ce
-	.byt "PEE",$cb
-	.byt "LE",$ce
-	.byt "STR",$a4
-	.byt "VA",$cc
-	.byt "AS",$c3
-	.byt "CHR",$a4
+	.byt "IN",'T'+$80
+	.byt "AB",'S'+$80
+	.byt "US",'R'+$80
+	.byt "FR",'E'+$80
+	.byt "PO",'S'+$80
+	.byt "SQ",'R'+$80
+	.byt "RN",'D'+$80
+	.byt "LO",'G'+$80
+	.byt "EX",'P'+$80
+	.byt "CO",'S'+$80
+	.byt "SI",'N'+$80
+	.byt "TA",'N'+$80
+	.byt "AT",'N'+$80
+	.byt "PEE",'K'+$80
+	.byt "LE",'N'+$80
+	.byt "STR",'$'+$80
+	.byt "VA",'L'+$80
+	.byt "AS",'C'+$80
+	.byt "CHR",'$'+$80
 lasnum	=$c7
-	.byt "LEFT",$a4
-	.byt "RIGHT",$a4
-	.byt "MID",$a4
-	.byt "G",$cf
+	.byt "LEFT",'$'+$80
+	.byt "RIGHT",'$'+$80
+	.byt "MID",'$'+$80
+	.byt "G",'O'+$80
 gotk	=$cb
 	.byt 0
 
@@ -60,9 +60,12 @@ gotk	=$cb
 reslst2	.byt "MO", 'N' + $80
 	.byt "DO", 'S' + $80
 	.byt "VPOK", 'E' + $80
+	.byt "SCREE", 'N' + $80
+	.byt "LAYE", 'R' + $80
 	.byt "VPEE", 'K' + $80
+	.byt "OF",'F'+$80
 	.byt 0
-num_esc_statements = 3
+num_esc_statements = 5
 num_esc_functions = 1
 .endif
 

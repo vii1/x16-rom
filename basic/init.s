@@ -3,7 +3,9 @@ panic	jsr clschn      ;warm start basic...
 	sta channl
 	jsr stkini      ;restore stack
 	cli             ;enable irq's
-
+.ifndef C64
+	jsr initx16
+.endif
 ready	ldx #$80
 	jmp (ierror)
 nerror	txa             ;get  high bit

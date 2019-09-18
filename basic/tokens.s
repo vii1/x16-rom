@@ -87,51 +87,53 @@ stmdsp2	; statements
 	.word monitor-1
 	.word dos-1
 	.word vpoke-1
+	.word st_screen-1
+	.word st_layer-1
 	; functions
 	.word vpeek
 .endif
 
-reslst	.byt "EN",$c4
+reslst	.byt "EN",'D'+$80
 endtk	=$80
-	.byt "FO",$d2
+	.byt "FO",'R'+$80
 fortk	=$81
-	.byt "NEX",$d4
-	.byt "DAT",$c1
+	.byt "NEX",'T'+$80
+	.byt "DAT",'A'+$80
 datatk	=$83
-	.byt "INPUT",$a3
-	.byt "INPU",$d4
-	.byt "DI",$cd
-	.byt "REA",$c4
-	.byt "LE",$d4
-	.byt "GOT",$cf
+	.byt "INPUT",'#'+$80
+	.byt "INPU",'T'+$80
+	.byt "DI",'M'+$80
+	.byt "REA",'D'+$80
+	.byt "LE",'T'+$80
+	.byt "GOT",'O'+$80
 gototk	=$89
-	.byt "RU",$ce
-	.byt "I",$c6
-	.byt "RESTOR",$c5
-	.byt "GOSU",$c2
+	.byt "RU",'N'+$80
+	.byt "I",'F'+$80
+	.byt "RESTOR",'E'+$80
+	.byt "GOSU",'B'+$80
 gosutk	=$8d
-	.byt "RETUR",$ce
-	.byt "RE",$cd
+	.byt "RETUR",'N'+$80
+	.byt "RE",'M'+$80
 remtk	=$8f
-	.byt "STO",$d0
-	.byt "O",$ce
-	.byt "WAI",$d4
-	.byt "LOA",$c4
-	.byt "SAV",$c5
-	.byt "VERIF",$d9
-	.byt "DE",$c6
-	.byt "POK",$c5
-	.byt "PRINT",$a3
-	.byt "PRIN",$d4
+	.byt "STO",'P'+$80
+	.byt "O",'N'+$80
+	.byt "WAI",'T'+$80
+	.byt "LOA",'D'+$80
+	.byt "SAV",'E'+$80
+	.byt "VERIF",'Y'+$80
+	.byt "DE",'F'+$80
+	.byt "POK",'E'+$80
+	.byt "PRINT",'#'+$80
+	.byt "PRIN",'T'+$80
 printk	=$99
-	.byt "CON",$d4
-	.byt "LIS",$d4
-	.byt "CL",$d2
-	.byt "CM",$c4
-	.byt "SY",$d3
-	.byt "OPE",$ce
-	.byt "CLOS",$c5
-	.byt "GE",$d4
-	.byt "NE",$d7
+	.byt "CON",'T'+$80
+	.byt "LIS",'T'+$80
+	.byt "CL",'R'+$80
+	.byt "CM",'D'+$80
+	.byt "SY",'S'+$80
+	.byt "OPE",'N'+$80
+	.byt "CLOS",'E'+$80
+	.byt "GE",'T'+$80
+	.byt "NE",'W'+$80
 scratk	=$a2
 
