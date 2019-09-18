@@ -87,7 +87,6 @@ stmdsp2	; statements
 	.word monitor-1
 	.word dos-1
 	.word vpoke-1
-	.word st_screen-1
 	.word st_layer-1
 	; functions
 	.word vpeek
@@ -117,6 +116,7 @@ gosutk	=$8d
 remtk	=$8f
 	.byt "STO",'P'+$80
 	.byt "O",'N'+$80
+tk_on = $91
 	.byt "WAI",'T'+$80
 	.byt "LOA",'D'+$80
 	.byt "SAV",'E'+$80

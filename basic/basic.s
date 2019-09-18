@@ -33,5 +33,7 @@
 .include "init.s"
 .ifndef C64
 .include "x16additions.s"
+.include "x16graphics.s"
+.include "x16globals.s"
 .endif
 

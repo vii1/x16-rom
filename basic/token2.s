@@ -60,12 +60,13 @@ gotk	=$cb
 reslst2	.byt "MO", 'N' + $80
 	.byt "DO", 'S' + $80
 	.byt "VPOK", 'E' + $80
-	.byt "SCREE", 'N' + $80
 	.byt "LAYE", 'R' + $80
+tk_layer = 3
 	.byt "VPEE", 'K' + $80
 	.byt "OF",'F'+$80
+tk_off = 5
 	.byt 0
-num_esc_statements = 5
+num_esc_statements = 4
 num_esc_functions = 1
 .endif
 
