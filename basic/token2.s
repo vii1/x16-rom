@@ -62,6 +62,11 @@ reslst2	.byt "MO", 'N' + $80
 	.byt "VPOK", 'E' + $80
 	.byt "LAYE", 'R' + $80
 tk_layer = 3
+	.byt "CL",'S'+$80
+	;.byt "MOD", 'E' + $80
+	;.byt "SCAL",'E'+$80
+	;.byt "COLO",'R'+$80
+	;.byt "SCROL",'L'+$80
 	.byt "VPEE", 'K' + $80
 	.byt "OF",'F'+$80
 tk_off = 5

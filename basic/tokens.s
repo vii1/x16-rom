@@ -88,6 +88,7 @@ stmdsp2	; statements
 	.word dos-1
 	.word vpoke-1
 	.word st_layer-1
+	.word st_cls-1
 	; functions
 	.word vpeek
 .endif
