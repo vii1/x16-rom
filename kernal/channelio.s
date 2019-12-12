@@ -1,4 +1,5 @@
 	.segment "CHANNEL"
+
 ;***************************************
 ;* getin -- get character from channel *
 ;*      channel is determined by dfltn.*
@@ -12,11 +13,7 @@
 ngetin	lda dfltn       ;check device
 	bne gn10        ;not keyboard
 ;
-	lda ndx         ;queue index
-	beq gn20        ;nobody there...exit
-;
-	sei
-	jmp lp2         ;go remove a character
+	jmp kbd_get     ;go remove a character
 ;
 gn10	cmp #2          ;is it rs-232
 	bne bn10        ;no...use basin
@@ -24,7 +21,7 @@ gn10	cmp #2          ;is it rs-232
 gn232	sty xsav        ;save .y, used in rs232
 	jsr bsi232
 	ldy xsav        ;restore .y
-gn20	clc             ;good return
+	clc             ;good return
 	rts
 
 ;***************************************
@@ -83,6 +80,8 @@ bn35	jmp acptr       ;good...handshake
 ;input from rs232
 ;
 bn50	jsr gn232       ;get info
+	brk
+.if 0 ; original RS232 code; needs to be adapted
 	bcs bn33        ;error return
 	cmp #00
 	bne bn32        ;good data...exit
@@ -90,6 +89,7 @@ bn50	jsr gn232       ;get info
 	and #$60
 	bne bn31        ;an error...exit with c/r
 	beq bn50        ;no error...stay in loop
+.endif
 
 ;***************************************
 ;* bsout -- out character to channel   *

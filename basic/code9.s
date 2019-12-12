@@ -35,8 +35,9 @@ loprel	sec
 	jmp loprel
 endrel	ldx opmask
 	bne finrel
-	bcs qop
-	adc #greatk-plustk
+	bcc nqop
+	jmp qop
+nqop	adc #greatk-plustk
 	bcc qop
 	adc valtyp
 	bne *+5
@@ -135,7 +136,6 @@ eval0	jsr chrget
 	bcs eval2
 eval1	jmp fin
 eval2
-.ifndef C64
 ;**************************************
 ; hex literal input
 ;**************************************
@@ -183,7 +183,6 @@ evalh6	clc
 	rts
 evalb0
 ;**************************************
-.endif
 	jsr isletc
 	bcc *+5
 	jmp isvar
@@ -233,9 +232,9 @@ eval4	cmp #fntk
 parchk	jsr chkopn
 	jsr frmevl
 chkcls	lda #41
-	.byt $2c
+	bra synchr
 chkopn	lda #40
-	.byt $2c
+	bra synchr
 chkcom	lda #44
 synchr	ldy #0
 	cmp (txtptr),y

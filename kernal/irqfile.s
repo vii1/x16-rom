@@ -2,10 +2,8 @@
 ; puls - checks for real irq's or breaks
 ;
 puls	pha
-	txa
-	pha
-	tya
-	pha
+	phx
+	phy
 	tsx
 	lda $104,x      ;get old p status
 	and #$10        ;break flag?

@@ -56,15 +56,31 @@ lasnum	=$c7
 gotk	=$cb
 	.byt 0
 
-.ifndef C64
+;**************************************
 reslst2	.byt "MO", 'N' + $80
 	.byt "DO", 'S' + $80
+	.byt "OL", 'D' + $80
+	.byt "GEO", 'S' + $80
 	.byt "VPOK", 'E' + $80
+	.byt "VLOA", 'D' + $80
+	.byt "SCREE", 'N' + $80
+	.byt "PSE", 'T' + $80
+	.byt "LIN", 'E' + $80
+	.byt "FRAM", 'E' + $80
+	.byt "REC", 'T' + $80
+	.byt "CHA", 'R' + $80
+	.byt "MOUS", 'E' + $80
+	.byt "COLO", 'R' + $80
+	.byt "TES", 'T' + $80
 	.byt "VPEE", 'K' + $80
+	.byt "M", 'X' + $80
+	.byt "M", 'Y' + $80
+	.byt "M", 'B' + $80
+	.byt "JO", 'Y' + $80
 	.byt 0
-num_esc_statements = 3
-num_esc_functions = 1
-.endif
+num_esc_statements = 15
+num_esc_functions = 5
+;**************************************
 
 err01	.byt "TOO MANY FILE",$d3
 err02	.byt "FILE OPE",$ce
@@ -154,9 +170,9 @@ errtab	.word err01
 okmsg	.byt $d,"OK",$d,$0
 err	.byt $20," ERROR",0 ;add a space for vic-40 screen
 intxt	.byt " IN ",0
-reddy	.byt $d,$a,"READY.",$d,$a,0
+reddy	.byt $d,"READY.",$d,0
 erbrk	=30
-brktxt	.byt $d,$a
+brktxt	.byt $d
 err30	.byt "BREAK",0,$a0 ;shifted space
 
 forsiz	=$12

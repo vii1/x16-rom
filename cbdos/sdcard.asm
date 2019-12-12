@@ -26,12 +26,10 @@
 	debug_enabled=1
 .endif
 
-;.include "common.inc"
-.include "zeropage.inc"
-;.include "errno.inc"
+.importzp write_blkptr, read_blkptr
 .include "sdcard.inc"
 .include "spi.inc"
-.include "via.inc"
+.include "vera.inc"
 .include "65c02.inc"
 .macro debug arg1, arg2
 .endmacro
@@ -43,6 +41,10 @@
 .export sdcard_init, sdcard_detect
 .export sd_select_card, sd_deselect_card
 .export sd_read_block, sd_read_multiblock, sd_write_block
+
+; XXX: 256-byte sector emulation; should go away:
+; XXX: the caller should cache a 512 byte sector instead
+.export sd_read_block_lower, sd_read_block_upper
 
 ; public bock api
 .export read_block=sd_read_block
@@ -57,8 +59,7 @@
 ;   out:
 ;     Z=1 sd card available, Z=0 otherwise A=ENODEV
 sdcard_detect:
-      lda via2portb
-      and #SDCARD_DETECT
+	; TODO
       rts
 
 ;---------------------------------------------------------------------
@@ -69,30 +70,14 @@ sdcard_detect:
 ;
 ;---------------------------------------------------------------------
 sdcard_init:
-      ; Port b bit 5and 6 input for sdcard and write protect detection, rest all outputs
-      lda #%10011111
-      sta via2ddrb
-      sta via2portb
-
-      lda #spi_device_sdcard
-      jsr spi_select_device
-      beq @init
-      rts
+	jsr spi_deselect
 @init:
       ; 74 SPI clock cycles - !!!Note: spi clock cycle should be in range 100-400Khz!!!
-			ldx #74
-
-			; set ALL CS lines and DO to HIGH
-			lda #%11111110
-			sta via2portb
-
-			tay
-			iny
+			ldy #10
 
 @l1:
-			sty via2portb
-			sta via2portb
-			dex
+			jsr spi_r_byte
+			dey
 			bne @l1
 
 			jsr sd_select_card
@@ -318,6 +303,54 @@ sd_deselect_card:
 
       rts
 
+; XXX: 256-byte sector emulation; should go away:
+; XXX: the caller should cache a 512 byte sector instead
+; ***** XXX
+sd_read_block_lower:
+			jsr sd_select_card
+
+			jsr sd_cmd_lba
+			lda #cmd17
+			jsr sd_cmd
+
+		   	bne @exit
+@l1:
+			; wait for sd card data token
+			lda #sd_data_token
+			jsr sd_wait
+            		bne @exit
+
+			ldy #$00
+			jsr halfblock
+
+@discard:		jsr spi_r_byte ; discard second half
+			iny
+			bne @discard
+
+@exit: 			jmp sd_deselect_card
+
+sd_read_block_upper:
+			jsr sd_select_card
+
+			jsr sd_cmd_lba
+			lda #cmd17
+			jsr sd_cmd
+
+		   	bne @exit
+@l1:
+			; wait for sd card data token
+			lda #sd_data_token
+			jsr sd_wait
+            		bne @exit
+
+			ldy #$00
+			jsr halfblock
+			jsr halfblock	; overwrite first half
+
+@exit: 			jmp sd_deselect_card
+; ***** XXX
+
+
 fullblock:
 			; wait for sd card data token
 			lda #sd_data_token
@@ -533,8 +566,13 @@ sd_wait:
 ; select sd card, pull CS line to low
 ;---------------------------------------------------------------------
 sd_select_card:
-			lda #spi_device_sdcard
-			sta via2portb
+			ldx #>VERA_SPI
+			stx veramid
+			ldx #VERA_SPI >> 16
+			stx verahi
+			ldx #1
+			stx veralo  ; ctrl reg
+			stx veradat ; ss=1
 			;TODO FIXME race condition here!
 			
 ; fall through to sd_busy_wait

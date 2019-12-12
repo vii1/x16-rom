@@ -7,10 +7,11 @@ golst	jsr linget
 	jsr chrgot
 	beq lstend
 	cmp #minutk
-	bne flnrts
-	jsr chrget
-	jsr linget
-	bne flnrts
+	beq nflnrts
+	jmp flnrts
+nflnrts	jsr clnget
+	beq lstend
+	jmp flnrts
 lstend	pla
 	pla
 	lda linnum
@@ -65,7 +66,6 @@ nqplop	bpl ploop
 	beq ploop
 	bit dores
 	bmi ploop
-.ifndef C64
 ;**************************************
 ; new de-tokenization
 ;**************************************
@@ -91,7 +91,6 @@ prit32	iny
 	bne prit32
 nesctk:
 ;**************************************
-.endif
 	sec
 	sbc #127
 	tax

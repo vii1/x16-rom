@@ -18,12 +18,19 @@
 .export tmp1, krn_tmp, krn_tmp2, krn_tmp3, sd_tmp, lba_addr, blocks
 .export fd_area, sd_blktarget, block_data, block_fat
 
-.include "zeropage.inc"
+.importzp filenameptr, krn_ptr1, krn_ptr3, dirptr, read_blkptr, buffer, bank_save
+
+.import status
+
 .include "common.inc"
 IMPORTED_FROM_MAIN=1
+
+.feature labels_without_colons
+
 .include "fat32.inc"
 .include "fcntl.inc"
 .include "65c02.inc"
+
 
 NUM_BUFS = 4
 TOTAL_NUM_BUFS = NUM_BUFS + 3
@@ -155,6 +162,14 @@ buffer_for_channel:
 	jmp cbdos_unlsn
 	jmp cbdos_listn
 	jmp cbdos_talk
+; GEOS
+	jmp OpenDisk
+	jmp ReadBuff
+	jmp ReadBlock
+	jmp GetDirHead
+	jmp CalcBlksFree
+	jmp Get1stDirEntry
+	jmp GetNxtDirEntry
 
 cbdos_init:
 	; XXX don't do lazy init
@@ -409,11 +424,11 @@ cbdos_acptr:
 
 ; EOF
 	lda #$40
-	.byte $2c
-@acptr_nofd:
+	bra :+
+@acptr_nofd
 ; no fd
 	lda #$02 ; timeout/file not found
-	sta $90
+:	sta status
 	lda #0
 	ldy save_y
 	ldx save_x
@@ -438,7 +453,7 @@ cbdos_acptr:
  	cmp #MAGIC_FD_STATUS
 	bne @acptr9
 	lda #$40 ; EOF
-	sta $90
+	sta status
 	jsr set_status_ok
 	lda buffer_len + 2 * BUFNO_STATUS
 	sta cur_buffer_len
@@ -598,16 +613,16 @@ finished_with_buffer:
 ;****************************************
 set_status_ok:
 	lda #$00
-	.byte $2c
-set_status_writeprot:
+	bra :+
+set_status_writeprot
 	lda #$26
-	.byte $2c
-set_status_synerr:
+	bra :+
+set_status_synerr
 	lda #$31
-	.byte $2c
-set_status_73:
+	bra :+
+set_status_73
 	lda #$73
-	pha
+:	pha
 	pha
 	lsr
 	lsr
@@ -923,16 +938,16 @@ read_dir:
 	sbc #>10
 	bcs gt_10
 	ldx #3
-	.byte $2c
-gt_10:
+	bra :+
+gt_10
 	ldx #2
-	.byte $2c
-gt_100:
+	bra :+
+gt_100
 	ldx #1
-	.byte $2c
-gt_1000:
+	bra :+
+gt_1000
 	ldx #0
-	lda #' '
+:	lda #' '
 :	jsr storedir
 	dex
 	bne :-
@@ -1061,3 +1076,109 @@ cmd_c:
 
 cmd_u:
 	jmp set_status_73
+
+
+;
+; GEOS
+;
+; TODO: The SD card driver is using zero page and other memory
+;       locations that are also used by GEOS! We need too find
+;       memory that is unused by KERNAL, BASIC and GEOS!
+
+.include "../geos/inc/geossym.inc"
+.include "../geos/inc/geosmac.inc"
+
+.import sd_read_block_lower, sd_read_block_upper
+
+OpenDisk:
+	jsr sdcard_init
+
+	jsr get_dir_head
+	LoadB $848b, $ff ; isGEOS
+	ldx #17
+:	lda $8290,x
+	sta $841e,x
+	dex
+	bpl :-
+	LoadW r5, $841e
+	ldx #0
+	rts
+
+ReadBuff:
+	LoadW r4, $8000
+ReadBlock:
+GetBlock:
+	ldx #1
+	lda #0
+	tay
+@l1:	cpx r1L
+	beq @l2
+	clc
+	adc secpertrack - 1,x
+	bcc @l3
+	iny
+@l3:	inx
+	jmp @l1
+@l2:	clc
+	adc r1H
+	bcc @l4
+	iny
+@l4:	sta lba_addr+0
+	sty lba_addr+1
+	stz lba_addr+2
+	stz lba_addr+3
+	lsr lba_addr+1 ; / 2
+	ror lba_addr+0
+	lda r4L
+	sta read_blkptr
+	lda r4H
+	sta read_blkptr + 1
+	bcs @l5
+	jsr sd_read_block_lower
+	jmp @l6
+@l5:	jsr sd_read_block_upper
+@l6:	rts
+
+
+
+GetDirHead:
+	jsr get_dir_head
+	LoadW r4, $8200
+	rts
+
+
+CalcBlksFree:
+	LoadW r4, 999*4
+	LoadW r3, 999*4
+	ldx #0
+	rts
+
+
+Get1stDirEntry:
+	LoadW r4, $8000
+	LoadB r1L, 18
+	LoadB r1H, 1
+	jsr ReadBlock
+	lda #$02
+	sta r4L
+	sta r5L
+	lda #$80
+	sta r4H
+	sta r5H
+	ldx #0
+	sec
+	rts
+
+GetNxtDirEntry:
+	ldy #1
+	clc
+	rts
+
+get_dir_head:
+	LoadB r1L, 18
+	LoadB r1H, 0
+	LoadW r4, $8200
+	jmp ReadBlock
+
+secpertrack:
+	.byte 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 19, 19, 19, 19, 19, 19, 19, 18, 18, 18, 18, 18, 18, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17

@@ -14,7 +14,7 @@ nready	jmp readyx
 init	jsr initv       ;go init vectors
 	jsr initcz      ;go init charget & z-page
 	jsr initms      ;go print initilization messages
-	ldx #stkend-256 ;set up end of stack
+init2	ldx #stkend-256 ;set up end of stack
 	txs
 	bne ready       ;jmp...ready
 
@@ -31,7 +31,7 @@ chdgot	lda 60000
 	sec
 	sbc #$d0
 chdrts	rts
-	.byt 128,79,199,82,88
+inrndx	.byt 128,79,199,82,88
 
 initcz	lda #76
 	sta jmper
@@ -40,19 +40,16 @@ initcz	lda #76
 	ldy #>fcerr
 	sta usrpok+1
 	sty usrpok+2
-	lda #<givayf
-	ldy #>givayf
-	sta adray2
-	sty adray2+1
-	lda #<flpint
-	ldy #>flpint
-	sta adray1
-	sty adray1+1
-	ldx #initcz-initat-1
+	ldx #inrndx-initat-1
 movchg	lda initat,x
 	sta chrget,x
 	dex
 	bpl movchg
+	ldx #initcz-inrndx-1
+movch2	lda inrndx,x
+	sta rndx,x
+	dex
+	bpl movch2
 	lda #strsiz
 	sta four6
 	lda #0
@@ -88,6 +85,26 @@ initms	lda txttab
 	lda #<fremes
 	ldy #>fremes
 	jsr strout
+	sec
+	jsr $ff99       ;read num ram banks
+	tax
+	bne initm2
+	ldx #<2048
+	lda #>2048
+	bne initm3
+initm2	sta facho
+	lda #0
+	asl facho
+	rol
+	asl facho
+	rol
+	asl facho
+	rol
+	ldx facho
+initm3	jsr linprt
+	lda #<freme2
+	ldy #>freme2
+	jsr strout
 	lda memsiz
 	sec
 	sbc txttab
@@ -111,17 +128,15 @@ initv1	lda bvtrs,x
 chke0	.byt $00
 
 fremes
-	.byt $93
+	.byt $8f, $93
 	.byt $9c, $df, $12, $20, $20, $df, $92, $20, $20, $20, $12, $a9, $20, $20, $92, $a9, 13
 	.byt $9a, $20, $df, $12, $20, $20, $df, $92, $20, $12, $a9, $20, $20, $92, $a9
 	.byt 5, "  **** COMMANDER X16 BASIC V2 ****", 13
 	.byt $9f, $20, $20, $df, $12, $20, $20, $92, $20, $12, $20, $20, $92, $a9, 13
 	.byt $1e, $20, $20, $20, $20, $12, $20, $92, $20, $12, $20, $92
-.ifdef C64
-	.byt 5, "     DEVELOPMENT SYSTEM"
-.else
-	.byt 5, "     2048K RAM SYSTEM"
-.endif
+	.byt 5, "     ",0
+
+freme2	.byt "K HIGH RAM"
 .ifdef PRERELEASE_VERSION
 	.byte " - ROM VERSION R"
 .if PRERELEASE_VERSION >= 100

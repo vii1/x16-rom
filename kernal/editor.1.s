@@ -1,31 +1,18 @@
+.import kbd_config, kbd_scan, kbd_clear, kbd_put, kbd_get, kbd_remove, kbd_get_modifiers, kbd_get_stop ; [ps2kbd]
+.import mouse_init, mouse_scan ; [ps2mouse]
+
 	.segment "EDITOR"
 maxchr=80
 nwrap=2 ;max number of physical lines per logical line
-;
-;undefined function entry
-;
-; undefd ldx #0
-; undef2 lda unmsg,x
-; jsr prt
-; inx
-; cpx #unmsg2-unmsg
-; bne undef2
-; sec
-; rts
-;
-; unmsg .byt $d,'?advanced function not available',$d
-; unmsg2
+
+.import banked_cpychr
+
 ;
 ;return address of first 6522
 ;
 iobase
-.ifdef C64
-	ldx #<d1pra
-	ldy #>d1pra
-.else
 	ldx #<via1
 	ldy #>via1
-.endif
 	rts
 ;
 ;return max rows,cols of screen
@@ -48,63 +35,33 @@ plot10	ldx tblx
 ;set screen size
 ;
 scnsiz	stx llen
-	dex
-	stx llenm1
 	sty nlines
 	iny
 	sty nlinesp1
 	dey
 	dey
 	sty nlinesm1
-	dey
-	sty nlinesm2
 	jmp clsr ; clear screen
-
-;
-; set keyboard layout .a
-;
-setkbd	tax
-	lda d1prb       ;save ROM bank
-	pha
-	lda #3
-	sta d1prb
-	txa
-setkb2	sta curkbd
-	asl
-	asl
-	asl
-	asl             ;*16
-	tax
-	lda $c000,x
-	beq setkb2      ;end of list? set #0
-	ldy #0
-setkb1	lda $c000,x
-	sta kbdnam,y    ;8 bytes kbnam, 8  bytes kbtab
-	inx
-	iny
-	cpy #16
-	bne setkb1
-	pla
-	sta d1prb       ;restore ROM bank
-	rts
 
 ;initialize i/o
 ;
 cint	jsr iokeys
+
+	jsr mouse_init  ;init mouse
+
 ;
 ; establish screen memory
 ;
 	jsr panic       ;set up vic
 
-	ldx #80
-	ldy #60
-	jsr scnsiz      ;set screen size to default
+	lda #2
+	sec
+	jsr scrmod      ;set screen mode to default
 ;
 	lda #0          ;make sure we're in pet mode
 	sta mode
 	sta blnon       ;we dont have a good char from the screen yet
 
-.ifdef PS2
 	lda $9fbe       ;emulator detection
 	cmp #'1'
 	bne nemu
@@ -112,24 +69,11 @@ cint	jsr iokeys
 	cmp #'6'
 	bne nemu
 	lda $9fbd       ;emulator keyboard layout
-	.byte $2c
-nemu:	lda #0          ;US layout
-	jsr setkbd
-.else
-	lda #<shflog    ;set shift logic indirects
-	sta keylog
-	lda #>shflog
-	sta keylog+1
-.endif
-	lda #10
-	sta xmax        ;maximum type ahead buffer size
-	sta delay
+	bra :+
+nemu	lda #0          ;US layout
+:	jsr kbd_config
 	lda #blue << 4 | white
 	sta color       ;init text color
-.ifndef PS2
-	lda #4
-	sta kount       ;delay between key repeats
-.endif
 	lda #$c
 	sta blnct
 	sta blnsw
@@ -174,7 +118,8 @@ fndstr	ldy ldtb1,x     ;find begining of line
 ;
 stok	jsr setpnt      ;set up pnt indirect 901227-03**********
 ;
-	lda llenm1
+	lda llen
+	dec
 	inx
 fndend	ldy ldtb1,x
 	bmi stdone
@@ -210,11 +155,15 @@ initv
 	lda #0
 	sta veractl     ;set ADDR1 active
 
-	lda #$14        ;$40000: layer 1 registers
-	sta verahi
-	lda #0
-	sta veramid
+	lda #1
+	jsr cpychr
+
+	lda #$00        ;$F3000: layer 1 registers
 	sta veralo
+	lda #$30
+	sta veramid
+	lda #$1f
+	sta verahi
 
 	ldx #0
 px4	lda tvera_layer1,x
@@ -223,8 +172,9 @@ px4	lda tvera_layer1,x
 	cpx #tvera_layer1_end-tvera_layer1
 	bne px4
 
-	lda #$40
+	lda #$00        ;$F0000: composer registers
 	sta veralo
+	sta veramid
 	ldx #0
 px5	lda tvera_composer,x
 	sta veradat
@@ -233,8 +183,14 @@ px5	lda tvera_composer,x
 	bne px5
 	rts
 
-mapbas	=0
-tilbas	=$20000
+cpychr:
+	php
+	sei
+	jsr jsrfar
+	.word banked_cpychr
+	.byte BANK_CHRSET
+	plp
+	rts
 
 ;NTSC=1
 
@@ -242,9 +198,11 @@ tvera_layer1
 	.byte 0 << 5 | 1  ;mode=0, enabled=1
 	.byte 1 << 2 | 2  ;maph=64, mapw=128
 	.word mapbas >> 2 ;map_base
-	.word tilbas >> 2 ;tile_base
+	.word tilbas >> 2 ;tile_bas
 	.word 0, 0        ;hscroll, vscroll
 tvera_layer1_end
+
+mapbas	=0
 
 .ifdef NTSC
 ; ***** NTSC (with overscan)
@@ -283,27 +241,13 @@ tvera_composer_end
 .endif
 
 ;
-;remove character from queue
-;
-lp2	ldy keyd
-	ldx #0
-lp1	lda keyd+1,x
-	sta keyd,x
-	inx
-	cpx ndx
-	bne lp1
-	dec ndx
-	tya
-	cli
-	clc             ;good return
-	rts
-;
 loop4	jsr prt
 loop3
-	lda ndx
+	jsr kbd_get
 	sta blnsw
 	sta autodn      ;turn on auto scroll down
 	beq loop3
+	pha
 	sei
 	lda blnon
 	beq lp21
@@ -312,17 +256,20 @@ loop3
 	ldy #0
 	sty blnon
 	jsr dspp
-lp21	jsr lp2
+lp21	cli
+	pla
 	cmp #$83        ;run key?
 	bne lp22
-	ldx #9
-	sei
-	stx ndx
-lp23	lda runtb-1,x
-	sta keyd-1,x
-	dex
-	bne lp23
-	beq loop3
+; put SHIFT+STOP text into keyboard buffer
+	jsr kbd_clear
+	ldx #0
+:	lda runtb,x
+	jsr kbd_put
+	inx
+	cpx #runtb_end-runtb
+	bne :-
+	bra loop3
+
 lp22	pha
 	sec
 	sbc #$85         ;f1 key?
@@ -342,14 +289,14 @@ lp25	lda fkeytb,x     ;search for replacement
 lp26	inx
 	dey
 	bne lp25
-lp27	lda fkeytb,x
-	sta keyd,y
+lp27	jsr kbd_clear
+lp24	lda fkeytb,x
+	jsr kbd_put
+	tay              ;set flags
 	beq lp28
 	inx
-	iny
-	bne lp27
-lp28	sty ndx
-	pla
+	bne lp24
+lp28	pla
 loop3a	jmp loop3
 ;
 lp29	pla
@@ -393,6 +340,8 @@ lop5	ldy pntr
 	jsr ldapnty
 notone
 	sta data
+	bit mode
+	bvs lop53       ;ISO
 lop51	and #$3f
 	asl data
 	bit data
@@ -424,6 +373,8 @@ clp1	sta data
 	pla
 	tay
 	lda data
+	bit mode
+	bvs clp7        ;ISO
 	cmp #$de        ;is it <pi> ?
 	bne clp7
 	lda #$ff
@@ -438,7 +389,10 @@ qtswc	cmp #$22
 	lda #$22
 qtswl	rts
 
-nxt33	ora #$40
+nxt33
+	bit mode
+	bvs nc3         ;ISO
+	ora #$40
 nxt3	ldx rvs
 	beq nvs
 nc3	ora #$80
@@ -520,7 +474,27 @@ bkln1	dex
 
 ;print routine
 ;
-prt	pha
+prt
+.if 0
+	pha
+	lda blnsw
+	beq @1
+	pla
+	.import GRAPH_put_char
+	pha
+	phx
+	phy
+	jsr GRAPH_put_char
+	ply
+	plx
+	pla
+	clc
+	rts
+
+@1:	pla
+.endif
+
+	pha
 	sta data
 	txa
 	pha
@@ -532,11 +506,16 @@ prt	pha
 	lda data
 	bpl *+5
 	jmp nxtx
+	ldx qtsw
+	cpx #2          ;"no exceptions" quote mode (used by monitor)
+	beq njt1
 	cmp #$d
 	bne njt1
 	jmp nxt1
 njt1	cmp #' '
 	bcc ntcn
+	bit mode
+	bvs njt9        ;ISO
 	cmp #$60        ;lower case?
 	bcc njt8        ;no...
 	and #$df        ;yes...make screen lower
@@ -546,7 +525,10 @@ njt9	jsr qtswc
 	jmp nxt3
 ntcn	ldx insrt
 	beq cnc3x
-	jmp nc3
+	bit mode
+	bvc cnc3y       ;not ISO
+	jmp nvs
+cnc3y	jmp nc3
 cnc3x	cmp #$14
 	bne ntcn1
 	tya
@@ -574,9 +556,14 @@ bk2	lda #' '
 	bpl jpl3
 ntcn1	ldx qtsw
 	beq nc3w
+	bit mode
+	bvc cnc3        ;not ISO
+	jmp nvs
 cnc3	jmp nc3
 nc3w	cmp #$12
 	bne nc1
+	bit mode
+	bvs nc1         ;ISO
 	sta rvs
 nc1	cmp #$13
 	bne nc2
@@ -622,6 +609,8 @@ colr1	jsr chkcol      ;check for a color
 nxtx
 keepit
 	and #$7f
+	bit mode
+	bvs nxtx1       ;ISO
 	cmp #$7f
 	bne nxtx1
 	lda #$5e
@@ -631,6 +620,9 @@ nxtxa
 	bcc uhuh
 	jmp nxt33
 uhuh
+	ldx qtsw
+	cpx #2
+	beq up5
 	cmp #$d
 	bne up5
 	jmp nxt1
@@ -667,8 +659,11 @@ ins2	dey
 insext	jmp loop2
 up9	ldx insrt
 	beq up2
-up6	ora #$40
-	jmp nc3
+up6
+	bit mode
+	bvs up1         ;ISO
+	ora #$40
+up1	jmp nc3
 up2	cmp #$11
 	bne nxt2
 	ldx tblx
@@ -743,7 +738,8 @@ back	dec tblx
 ; check for increment tblx
 ;
 chkdwn	ldx #nwrap
-	lda llenm1
+	lda llen
+	dec
 dwnchk	cmp pntr
 	beq dnline
 	clc
@@ -760,6 +756,18 @@ dnline	ldx tblx
 dwnbye	rts
 
 chkcol
+        cmp #$01    ; check ctrl-a for invert.
+        bne ntinv
+        lda color    ; get current text color.
+        asl a        ; swap msn/lsn.
+        adc #$80
+        rol a
+        asl a
+        adc #$80
+        rol a
+        sta color    ; stash back.
+        rts
+ntinv
 	ldx #15         ;there's 15 colors
 chk1a	cmp coltab,x
 	beq chk1b
@@ -835,5 +843,279 @@ stapnt3	sta veramid
 	sta veradat
 	rts
 
-; rsr modify for vic-40 system
-; rsr 12/31/81 add 8 more colors
+scrsz   =$4000          ;screen ram size, rounded up to power of two
+scrmsk  =(>scrsz)-1     ;for masking offset in screen ram
+
+;screen scroll routine
+;
+scrol	lda sal
+	pha
+	lda sah
+	pha
+;
+;   s c r o l l   u p
+;
+scro0	ldx #$ff
+	dec tblx
+	dec lsxp
+	dec lintmp
+scr10	inx             ;goto next line
+	jsr setpnt      ;point to 'to' line
+	cpx nlinesm1    ;done?
+	bcs scr41       ;branch if so
+;
+	lda #0          ;setup from pntr
+	sta sal
+	lda ldtb1+1,x
+	jsr scrlin      ;scroll this line up1
+	bmi scr10
+;
+scr41
+	jsr clrln
+;
+	ldx #0          ;scroll hi byte pointers
+scrl5	lda ldtb1,x
+	and #$7f
+	ldy ldtb1+1,x
+	bpl scrl3
+	ora #$80
+scrl3	sta ldtb1,x
+	inx
+	cpx nlinesm1
+	bne scrl5
+;
+	ldy nlinesm1
+	lda ldtb1,y
+	ora #$80
+	sta ldtb1,y
+	lda ldtb1       ;double line?
+	bpl scro0       ;yes...scroll again
+;
+	inc tblx
+	inc lintmp
+	jsr kbd_get_modifiers
+	and #4
+	beq mlp42
+;
+	lda #mhz
+	ldy #0
+mlp4	nop             ;delay
+	dex
+	bne mlp4
+	dey
+	bne mlp4
+	sec
+	sbc #1
+	bne mlp4
+	jsr kbd_clear   ;clear key queue buffer
+;
+mlp42	ldx tblx
+;
+pulind	pla             ;restore old indirects
+	sta sah
+	pla
+	sta sal
+	rts
+
+newlin
+	ldx tblx
+bmt1	inx
+	lda ldtb1,x     ;find last display line of this line
+	bpl bmt1        ;table end mark=>$ff will abort...also
+bmt2	stx lintmp      ;found it
+;generate a new line
+	cpx nlinesm1    ;is one line from bottom?
+	beq newlx       ;yes...just clear last
+	bcc newlx       ;<nlines...insert line
+	jsr scrol       ;scroll everything
+	ldx lintmp
+	dex
+	dec tblx
+	jmp wlog30
+newlx	lda sal
+	pha
+	lda sah
+	pha
+	ldx nlines
+scd10	dex
+	jsr setpnt      ;set up to addr
+	cpx lintmp
+	bcc scr40
+	beq scr40       ;branch if finished
+	lda #0          ;set from addr
+	sta sal
+	lda ldtb1-1,x
+	jsr scrlin      ;scroll this line down
+	bmi scd10
+scr40
+	jsr clrln
+	ldx nlines
+	dex
+	dex
+scrd21
+	cpx lintmp      ;done?
+	bcc scrd22      ;branch if so
+	lda ldtb1+1,x
+	and #$7f
+	ldy ldtb1,x     ;was it continued
+	bpl scrd19      ;branch if so
+	ora #$80
+scrd19	sta ldtb1+1,x
+	dex
+	bne scrd21
+scrd22
+	ldx lintmp
+	jsr wlog30
+;
+	jmp pulind      ;go pul old indirects and return
+;
+; scroll line from sal to pnt
+;
+scrlin
+	and #scrmsk     ;clear any garbage stuff
+	ora hibase      ;put in hiorder bits
+	sta sal+1
+
+	;destination into addr1
+	lda #$10
+	sta verahi
+	lda pnt
+	sta veralo
+	lda pnt+1
+	sta veramid
+
+	lda #1
+	sta veractl
+
+	;source into addr2
+	lda #$10
+	sta verahi
+	lda sal
+	sta veralo
+	lda sal+1
+	sta veramid
+
+	lda #0
+	sta veractl
+
+	ldy llen
+	dey
+scd20	lda veradat2    ;character
+	sta veradat
+	lda veradat2    ;color
+	sta veradat
+	dey
+	bpl scd20
+	rts
+;
+; set up pnt and y
+; from .x
+;
+setpnt	lda #0
+	sta pnt
+	lda ldtb1,x
+	and #scrmsk
+	ora hibase
+	sta pnt+1
+	rts
+;
+; clear the line pointed to by .x
+;
+clrln	ldy llen
+	jsr setpnt
+	lda pnt
+	sta veralo      ;set base address
+	lda pnt+1
+	sta veramid
+	lda #$10        ;auto-increment = 1
+	sta verahi
+clr10	lda #$20
+	sta veradat     ;store space
+	lda color       ;always clear to current foregnd color
+	sta veradat
+	dey
+	bne clr10
+	rts
+
+;
+;put a char on the screen
+;
+dspp	ldy #2
+	sty blnct       ;blink cursor
+dspp2	ldy pntr
+	jsr stapnty
+	stx veradat     ;color to screen
+	rts
+
+key
+; save VERA state
+	lda veractl
+	pha
+	lda #0
+	sta veractl
+	lda veralo
+	pha
+	lda veramid
+	pha
+	lda verahi
+	pha
+
+	jsr mouse_scan  ;scan mouse (do this first to avoid sprite tearing)
+	jsr $ffea       ;update jiffy clock
+	lda blnsw       ;blinking crsr ?
+	bne key4        ;no
+	dec blnct       ;time to blink ?
+	bne key4        ;no
+	lda #20         ;reset blink counter
+repdo	sta blnct
+	ldy pntr        ;cursor position
+	lsr blnon       ;carry set if original char
+	ldx gdcol       ;get char original color
+	php
+	jsr ldapnty     ;get character
+	inc blnon       ;set to 1
+	plp
+	bcs key5        ;branch if not needed
+	sta gdbln       ;save original char
+	lda veradat     ;get original color
+	sta gdcol       ;save it
+	ldx color       ;blink in this color
+	lda gdbln       ;with original character
+;
+key5
+	bit mode
+	bvc key3        ;not ISO
+	cmp #$9f
+	bne key2
+	lda gdbln
+	bra :+
+key2	lda #$9f
+	bra :+
+key3	eor #$80        ;blink it
+:	jsr dspp2       ;display it
+;
+key4
+	jsr kbd_scan    ;scan keyboard
+;
+kprend
+; restore VERA state
+	pla
+	sta verahi
+	pla
+	sta veramid
+	pla
+	sta veralo
+	pla
+	sta veractl
+
+.if 0 ; VIA#2 timer IRQ for 60 Hz
+	lda d1t1l       ;clear interupt flags
+.else
+	lda #1
+	sta veraisr
+.endif
+	ply             ;restore registers
+	plx
+	pla
+	rti             ;exit from irq routines
+

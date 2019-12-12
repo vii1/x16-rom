@@ -2,20 +2,13 @@
 ;if constant is contained in basic.
 ;array variables have zeroes placed
 ;in ram. undefined simple variables
-;have pointer t zero in basic.
+;have pointer to zero in basic.
 ;
 tstrom	sec
 	lda facmo
 	sbc #<romloc
 	lda faclo
 	sbc #>romloc
-	bcc tstr10
-;
-	lda #<initat
-	sbc facmo
-	lda #>initat
-	sbc faclo
-;
 tstr10	rts
 
 isvar	jsr ptrget
@@ -28,21 +21,20 @@ isvret	sta facmo
 	lda #0
 	sta facov
 	jsr tstrom      ;see if an array
-	bcc strrts      ;don't test st(i),ti(i)
+	bcc tstr10      ;don't test st(i),ti(i)
 	cpx #'T'
-	bne strrts
-	cpy #$c9
-	bne strrts
+	bne tstr10
+	cpy #'I'+$80
+	bne tstr10
 	jsr gettim
 	sty tenexp
 	dey
 	sty fbufpt
 	ldy #6
 	sty deccnt
-	ldy #fdcend-foutbl
+	ldy #<(fdcend-foutbl) ; "<" necessary to make ca65 happy
 	jsr foutim
 	jmp timstr
-strrts	rts
 gooo	bit intflg
 	bpl gooooo
 	ldy #0
@@ -80,7 +72,6 @@ gomovf	lda facmo
 	ldy facmo+1
 	jmp movfm
 isfun
-.ifndef C64
 ;**************************************
 ; new function execution
 ;**************************************
@@ -106,7 +97,6 @@ snerr9:	jmp snerr
 
 nesct3
 ;**************************************
-.endif
 	asl a
 	pha
 	tax
@@ -141,9 +131,9 @@ fingo	lda fundsp-onefun-onefun+256,y
 	jsr jmper
 	jmp chknum
 orop	ldy #255
-	.byt $2c
+	bra :+
 andop	ldy #0
-	sty count
+:	sty count
 	jsr ayint
 	lda facmo
 	eor count

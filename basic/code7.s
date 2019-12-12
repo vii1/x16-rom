@@ -18,9 +18,9 @@ outspc
 	lda channl
 	beq crtskp
 	lda #' '
-	.byt $2c
+	bra outdo
 crtskp	lda #29
-	.byt $2c
+	bra outdo
 outqst	lda #'?'
 outdo	jsr outch
 outrts	and #255
@@ -51,11 +51,7 @@ get	jsr errdir
 	cmp #'#'
 	bne gettty
 	jsr chrget
-	jsr getbyt
-	lda #44
-	jsr synchr
-	stx channl
-	jsr coin
+	jsr inpn10
 zz2=buf+1
 gettty	ldx #<zz2
 zz3=buf+2
@@ -67,11 +63,12 @@ zz3=buf+2
 	ldx channl
 	bne iorele
 	rts
-inputn	jsr getbyt
+inpn10	jsr getbyt
 	lda #44
 	jsr synchr
 	stx channl
-	jsr coin
+	jmp coin
+inputn	jsr inpn10
 	jsr notqti
 iodone	lda channl
 iorele	jsr clschn
@@ -110,7 +107,7 @@ read	ldx datptr
 	ldy datptr+1
 	.byt $a9
 	tya
-	.byt $2c
+	bra inpco1
 inpcon	lda #0
 inpco1	sta inpflg
 	stx inpptr

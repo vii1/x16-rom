@@ -1,3 +1,12 @@
+.include "../regs.inc"
+.include "../mac.inc"
+.include "graph/graph.inc"
+
+.import GRAPH_init
+
+.export jsrfar, banked_irq
+.export fetvec, fetch
+
 	.segment "ROUTINES"
 
 ;//////////////////   J U M P   T A B L E   R O U T I N E S   \\\\\\\\\\\\\\\\\
@@ -47,10 +56,10 @@ close_all
 	bne @10		;...branch if not current output device
 	lda #3
 	sta dflto	;restore screen output
-	.byte $2c
+	bra :+
 
 @10	cmp dfltn
-	bne @20		;...branch if not current input device
+:	bne @20		;...branch if not current input device
 	lda #0
 	sta dfltn	;restore keyboard input
 
@@ -94,74 +103,6 @@ indfet
 	jmp fetch
 
 
-; LONG CALL  utility
-;
-; jsr jsrfar
-; .word address
-; .byte bank
-
-jsrfar	pha             ;save registers
-	txa
-	pha
-	tya
-	pha
-
-        tsx
-	lda $104,x      ;return address lo
-	sta imparm
-	clc
-	adc #3
-	sta $104,x      ;and write back with 3 added
-	lda $105,x      ;return address hi
-	sta imparm+1
-	adc #0
-	sta $105,x
-
-	ldy #1
-	lda (imparm),y  ;target address lo
-	sta jmpfr+1
-	iny
-	lda (imparm),y  ;target address hi
-	sta jmpfr+2
-	cmp #$c0
-	bcs @1          ;target is in ROM
-; target is in RAM
-	lda d1pra
-	sta savbank     ;save original bank
-	iny
-	lda (imparm),y  ;target address bank
-	sta d1pra       ;set RAM bank
-	pla             ;restore registers
-	tay
-	pla
-	tax
-	pla
-	jsr jmpfr
-	pha
-	lda savbank
-	sta d1pra
-	pla
-	rts
-
-@1	lda d1prb
-	sta savbank     ;save original bank
-	iny
-	lda (imparm),y  ;target address bank
-	and #$07
-	sta d1prb       ;set ROM bank
-	pla             ;restore registers
-	tay
-	pla
-	tax
-	pla
-	jsr jmpfr
-	pha
-	lda savbank
-	sta d1prb
-	pla
-	rts
-
-
 ; \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 ;     *** print immediate ***
 ;  a jsr to this routine is followed by an immediate ascii string,
@@ -198,33 +139,151 @@ primm
 	rts             ;return
 
 
-swapper	lda llen
-	cmp #80
-	beq swpp1
-	ldx #80
+; modes:
+; $00: 40x30
+; $01: 80x30 ; XXX currently unsupported
+; $02: 80x60
+; $80: 320x240@256c + 40x30 text
+;     (320x200@256c + 40x25 text, currently)
+; $81: 640x400@16c ; XXX currently unsupported
+; $ff: toggle between $00 and $02
+
+scrmod	bcs scrnmd0
+	lda cscrmd
+	rts
+scrnmd0	cmp #$ff
+	bne scrmd1
+; toggle between 40x30 and  80x60
+	lda #2
+	cmp cscrmd
+	bne scrmd1
+	lda #0
+scrmd1	sta cscrmd
+	cmp #0 ; 40x30
+	beq swpp30
+	cmp #1 ; 80x30 currently unsupported
+	bne scrmd2
+scrmd3	sec
+	rts
+scrmd2	cmp #2 ; 80x60
+	beq swpp60
+	cmp #$80 ; 320x240@256c + 40x30 text
+	beq swpp25
+	cmp #$81 ; 640x400@16c
+	beq scrmd3 ; currently unsupported
+	bra scrmd3 ; otherwise: illegal mode
+
+swpp60	ldx #80
 	ldy #60
 	lda #128 ; scale = 1.0
-	bne swpp2 ; always
-swpp1	ldx #40
+	clc
+	bra swpp2
+
+swpp25	jsr grphon
+	ldy #25
+	sec
+	bra swpp3
+
+swpp30	clc
 	ldy #30
+swpp3	ldx #40
 	lda #64 ; scale = 2.0
 swpp2	pha
-	lda #$41
+	bcs swppp4
+	jsr grphoff
+swppp4	lda #$01
 	sta veralo
-	lda #0
+	lda #$00
 	sta veramid
-	lda #$14
+	lda #$1F
 	sta verahi
 	pla
-	sta veradat ; reg $40041: hscale
-	sta veradat ; reg $40041: vscale
-	jmp scnsiz
+	sta veradat ; reg $F0001: hscale
+	sta veradat ; reg $F0002: vscale
+	cpy #25
+	bne swpp1
+	lda #<400
+	bra :+
+swpp1	lda #<480
+:	pha
+	lda #7 ; vstop_lo
+	sta veralo
+	pla
+	sta veradat
+	jsr scnsiz
+	clc
+	rts
+
+
+grphon	lda #$0e ; light blue
+	sta color
+
+	jmp GRAPH_init
+
+grphoff	lda #$00        ; layer0
+	sta veralo
+	lda #$20
+	sta veramid
+	lda #$1F
+	sta verahi
+	lda #0          ; off
+	sta veradat
+	rts
+
+jsrfar:
+.include "../jsrfar.inc"
 
 ;/////////////////////   K E R N A L   R A M   C O D E  \\\\\\\\\\\\\\\\\\\\\\\
 
 .segment "KERNRAM"
+.export jsrfar3, jmpfr, imparm
+jsrfar3	sta d1prb       ;set ROM bank
+	pla
+	plp
+	jsr jmpfr
+	php
+	pha
+	phx
+	tsx
+	lda $0104,x
+	sta d1prb       ;restore ROM bank
+	lda $0103,x     ;overwrite reserved byte...
+	sta $0104,x     ;...with copy of .p
+	plx
+	pla
+	plp
+	plp
+	rts
+jmpfr	jmp $ffff
 
-;  FETCH  ram code      ( LDA (fetch_vector),Y  from any bank )
+.assert * <= $0400, error, "jmpfar must fit below $0400"
+
+.segment "KERNRAM2"
+
+banked_irq
+	pha
+	phx
+	lda d1prb       ;save ROM bank
+	pha
+	lda #BANK_KERNAL
+	sta d1prb
+	lda #>@l1       ;put RTI-style
+	pha             ;return-address
+	lda #<@l1       ;onto the
+	pha             ;stack
+	tsx
+	lda $0106,x     ;fetch status
+	pha             ;put it on the stack at the right location
+	jmp ($fffe)     ;execute other bank's IRQ handler
+@l1	pla
+	sta d1prb       ;restore ROM bank
+	plx
+	pla
+	rti
+
+.segment "ROUTINES"
+
+;  FETCH                ( LDA (fetch_vector),Y  from any bank )
 ;
 ;  enter with 'fetvec' pointing to indirect adr & .y= index
 ;             .x= memory configuration
@@ -238,41 +297,38 @@ fetch	lda d1pra       ;save current config (RAM)
 	pha
 	txa
 	sta d1pra       ;set RAM bank
+	plx             ;original ROM bank
 	and #$07
-	sta d1prb       ;set ROM bank
+	jsr fetch2
+	plx
+	stx d1pra       ;restore RAM bank
+	ora #0          ;set flags
+	rts
+.segment "KERNRAM2" ; *** RAM code ***
+fetch2	sta d1prb       ;set new ROM bank
 fetvec	=*+1
 	lda ($ff),y     ;get the byte ($ff here is a dummy address, 'FETVEC')
-	tax
-	pla
-	sta d1prb       ;restore previous memory configuration
-	pla
-	sta d1pra
-	txa
+	stx d1prb       ;restore ROM bank
 	rts
 
-
+.segment "ROUTINES"
 
 ;  STASH  ram code      ( STA (stash_vector),Y  to any bank )
 ;
 ;  enter with 'stavec' pointing to indirect adr & .y= index
 ;             .a= data byte to store
-;             .x= memory configuration
+;             .x= memory configuration (RAM bank)
 ;
 ;  exits with .x & status altered
 
 stash	sta stash1
 	lda d1pra       ;save current config (RAM)
 	pha
-	txa
-	sta d1pra       ;set RAM bank
-	and #$07
-	ldx d1prb       ;save current config (ROM)
-	sta d1prb       ;set ROM bank
+	stx d1pra       ;set RAM bank
 stash1	=*+1
 	lda #$ff
 stavec	=*+1
 	sta ($ff),y     ;put the byte ($ff here is a dummy address, 'STAVEC')
-	stx d1prb       ;restore previous memory configuration
 	pla
 	sta d1pra
 	rts
@@ -287,7 +343,8 @@ stavec	=*+1
 ;
 ;  exits with .a= data byte & status flags valid, .x is altered
 
-cmpare	pha
+cmpare
+	pha
 	lda d1pra       ;save current config (RAM)
 	pha
 	txa
@@ -309,14 +366,10 @@ cmpvec	=*+1
 	plp
 	rts
 
-jmpfr	jmp $ffff
 
 	; this should not live in the vector area, but it's ok for now
-monitor:
-	lda #1
-	sta d1prb ; ROM bank
-	jmp ($c000)
 restore_basic:
-	lda #0
-	sta d1prb ; ROM bank
-	jmp ($c002)
+	jsr jsrfar
+	.word $c000 + 3
+	.byte BANK_BASIC
+	;not reached

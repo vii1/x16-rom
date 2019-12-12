@@ -1,3 +1,16 @@
+.if 1
+.segment "monitor_a"
+.global monitor
+.segment "monitor_b"
+.segment "asmchars1"
+.segment "asmchars2"
+.segment "mnemos1"
+.segment "mnemos2"
+.segment "monitor_c"
+.segment "monitor_ram_code"
+monitor:
+	brk
+.else
 ; ----------------------------------------------------------------
 ; Monitor
 ; ----------------------------------------------------------------
@@ -37,6 +50,8 @@
 ; * "OD" switches all memory dumps/input to the drive's memory.
 ; * "B" command to introspect cartridge ROM
 
+.feature labels_without_colons
+
 .include "kernal.i"
 
 .ifdef CART_FC3
@@ -74,7 +89,7 @@ DEFAULT_BANK    := $37
 zp1             := $C1
 zp2             := $C3
 zp3             := $FF
-DEFAULT_BANK    := 0
+DEFAULT_BANK    := 7
 .endif
 
 .ifdef MACHINE_TED
@@ -147,11 +162,6 @@ video_bank_flag := ram_code_end + 20
 
 .import __asmchars1_RUN__
 .import __asmchars2_RUN__
-
-.ifdef MACHINE_X16
-	.word monitor ; cold start
-	.word monitor ; warm start
-.endif
 
 monitor:
 .ifdef MACHINE_TED
@@ -239,8 +249,8 @@ brk_entry:
         jsr     enable_all_roms
 .elseif .defined(MACHINE_X16)
 	pha
-	lda #1 ; UTIL
-	sta d1prb ; RAM bank
+	lda #BANK_KERNAL
+	sta d1prb ; ROM bank
 	pla
 .endif
         jmp     brk_entry2
@@ -274,9 +284,9 @@ brk_entry2:
         lda     entry_type
         cmp     #'C'
         bne     :+
-        .byte   $2C ; XXX bne + skip = beq + 2
+        bra     :++
 :       lda     #'B'
-        ldx     #'*'
+:       ldx     #'*'
         jsr     print_a_x
         clc
         lda     reg_pc_lo
@@ -360,9 +370,10 @@ LABEB:  ldy     #0
 
 syntax_error:
         lda     #'?'
-        .byte   $2C
-print_cr_then_input_loop:
+        bra :+
+print_cr_then_input_loop
         lda     #CR
+:
         jsr     BSOUT
 
 input_loop:
@@ -410,11 +421,18 @@ fill_kbd_buffer_with_csr_right:
         jsr     print_a_x
         lda     #CSR_RIGHT
         ldx     #0
-:       sta     KEYD,x ; fill kbd buffer with 7 CSR RIGHT characters
+:
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
+	sta     KEYD,x ; fill kbd buffer with 7 CSR RIGHT characters
+.endif
         inx
         cpx     #7
         bne     :-
+.ifndef MACHINE_X16
         stx     NDX ; 7
+.endif
         jmp     input_loop2
 
 cmd_mid2:
@@ -1521,8 +1539,9 @@ cmd_b:  jsr     basin_cmp_cr
         bcs     syn_err3
         and     #$03 ; XXX no effect
         ora     #$40 ; make $40 - $43
-        .byte   $2C
-LB326:  lda     #$70 ; by default, hide cartridge
+        bra     :+
+LB326  lda     #$70 ; by default, hide cartridge
+:
         sta     cartridge_bank
         jmp     print_cr_then_input_loop
 .endif
@@ -1565,9 +1584,10 @@ video_loop:
         cmp     #' '
         beq     video_loop
         jsr     hex_digit_to_nybble
-        .byte   $2C
-default_video_bank:
+        bra		:+
+default_video_bank
 	lda     #0
+:
 	jmp     store_bank
 
 not_video:
@@ -1577,15 +1597,16 @@ not_video:
 .elseif .defined(MACHINE_X16)
         jsr     get_hex_byte2
 .endif
-        .byte   $2C
-LB33F:  lda     #DEFAULT_BANK
+        bra :+
+LB33F  lda     #DEFAULT_BANK
+:
 .ifdef MACHINE_C64
         cmp     #$38
         bcs     syn_err3
         cmp     #$30
         bcc     syn_err3
 .endif
-        .byte   $2C
+        bra store_bank
 LB34A:  lda     #$80 ; drive
 store_bank:
         sta     bank
@@ -1782,11 +1803,12 @@ LB48E:  jsr     print_space
 
 print_up:
         ldx     #CSR_UP
-        .byte   $2C
+        bra     :+
 print_cr_dot:
         ldx     #'.'
+:        
         lda     #CR
-        .byte   $2C
+        bra     print_a_x
 print_dot_x:
         lda     #'.'
 print_a_x:
@@ -1797,18 +1819,19 @@ print_a_x:
 print_up_dot:
         jsr     print_up
         lda     #'.'
-        .byte   $2C
+        bra     :+
 ; XXX unused?
         lda     #CSR_RIGHT
-        .byte   $2C
-print_hash:
+        bra     :+
+print_hash
         lda     #'#'
-        .byte   $2C
-print_space:
+        bra     :+
+print_space
         lda     #' '
-        .byte   $2C
-print_cr:
+        bra     :+
+print_cr
         lda     #CR
+:
         jmp     BSOUT
 
 basin_skip_spaces_if_more:
@@ -1919,9 +1942,10 @@ syn_err5:
 
 print_dollar_hex_16:
         lda     #'$'
-        .byte   $2C
-print_space_hex_16:
+        bra     :+
+print_space_hex_16
         lda     #' '
+:
         jsr     BSOUT
 print_hex_16:
         lda     zp1 + 1
@@ -1971,7 +1995,15 @@ dump_8_ascii_characters:
 dump_ascii_characters:
         ldy     #0
 LB594:  jsr     load_byte
-        cmp     #$20
+.ifdef MACHINE_X16
+        bit     MODE
+	bvc     :+
+	inc     QTSW
+	inc     QTSW
+	inc     INSRT
+	jmp     LB5AD
+.endif
+:       cmp     #$20
         bcs     LB59F
         inc     RVS
         ora     #$40
@@ -2009,9 +2041,13 @@ LB5C8:  sty     tmp9
         ldy     tmp9
         plp
         bmi     :+
+.ifdef MACHINE_X16
+        bit     MODE
+        bvs     @l1
+.endif
         cmp     #$60
         bcs     :+
-        jsr     store_byte
+@l1:    jsr     store_byte
 :       iny
         dex
         bne     LB5C8
@@ -2112,34 +2148,55 @@ check_end:
 
 fill_kbd_buffer_comma:
         lda     #','
-        .byte   $2C
-fill_kbd_buffer_semicolon:
+        bra     :+
+fill_kbd_buffer_semicolon
         lda     #':'
-        .byte   $2C
-fill_kbd_buffer_a:
+        bra     :+
+fill_kbd_buffer_a
         lda     #'A'
-        .byte   $2C
-fill_kbd_buffer_leftbracket:
+        bra     :+
+fill_kbd_buffer_leftbracket
         lda     #'['
-        .byte   $2C
-fill_kbd_buffer_rightbracket:
+        bra     :+
+fill_kbd_buffer_rightbracket
         lda     #']'
-        .byte   $2C
-fill_kbd_buffer_singlequote:
+        bra     :+
+fill_kbd_buffer_singlequote
         lda     #$27 ; "'"
+:
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
         sta     KEYD
+.endif
         lda     zp1 + 1
         jsr     byte_to_hex_ascii
+.ifdef MACHINE_X16
+	jsr kbd_put
+	tya
+	jsr kbd_put
+.else
         sta     KEYD + 1
         sty     KEYD + 2
+.endif
         lda     zp1
         jsr     byte_to_hex_ascii
+.ifdef MACHINE_X16
+	jsr kbd_put
+	tya
+	jsr kbd_put
+.else
         sta     KEYD + 3
         sty     KEYD + 4
+.endif
         lda     #' '
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
         sta     KEYD + 5
         lda     #6 ; number of characters
         sta     NDX
+.endif
         rts
 
 ; print 7x cursor right
@@ -2210,7 +2267,11 @@ after_irq:
         bne fk_2 ; always
 :
 .endif
+.ifdef MACHINE_X16
+	jsr kbd_peek
+.else
         lda     NDX
+.endif
         bne     LB700
 LB6FA:  pla ; XXX JMP $EA81
         tay
@@ -2219,21 +2280,43 @@ LB6FA:  pla ; XXX JMP $EA81
         pla
         rti
 
-LB700:  lda     KEYD
+LB700:
+.ifndef MACHINE_X16
+        lda     KEYD
+.endif
 fk_2:   cmp     #KEY_F7
         bne     LB71C
+.ifdef MACHINE_X16
+	jsr kbd_clear
+.endif
         lda     #'@'
+.ifdef MACHINE_X16
+        jsr kbd_put
+.else
         sta     KEYD
+.endif
         lda     #'$'
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
         sta     KEYD + 1
+.endif
         lda     #CR
+.ifdef MACHINE_X16
+	jsr kbd_put
+	bra     LB6FA
+.else
         sta     KEYD + 2 ; store "@$' + CR into keyboard buffer
         lda     #3
         sta     NDX
         bne     LB6FA ; always
+.endif
 
 LB71C:  cmp     #KEY_F5
         bne     LB733
+.ifdef MACHINE_X16
+	jsr kbd_clear
+.endif
 .ifdef MACHINE_X16
         ldx     nlinesm1
 .else
@@ -2245,9 +2328,16 @@ LB71C:  cmp     #KEY_F5
         ldy     PNTR
         jsr     LE50C ; KERNAL set cursor position
 LB72E:  lda     #CSR_DOWN
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
         sta     KEYD
+.endif
 LB733:  cmp     #KEY_F3
         bne     LB74A
+.ifdef MACHINE_X16
+	jsr kbd_clear
+.endif
         ldx     #0
         cpx     TBLX
         beq     LB745
@@ -2255,7 +2345,11 @@ LB733:  cmp     #KEY_F3
         ldy     PNTR
         jsr     LE50C ; KERNAL set cursor position
 LB745:  lda     #CSR_UP
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
         sta     KEYD
+.endif
 LB74A:  cmp     #CSR_DOWN
         beq     LB758
         cmp     #CSR_UP
@@ -2321,7 +2415,11 @@ LB7C7:  lda     #CSR_UP
 LB7CD:  lda     #CR
         ldx     #CSR_HOME
 LB7D1:  ldy     #0
+.ifdef MACHINE_X16
+	jsr kbd_clear
+.else
         sty     NDX
+.endif
         sty     disable_f_keys
         jsr     print_a_x
         jsr     print_7_csr_right
@@ -2389,7 +2487,11 @@ LB845:  ldy     #1 ; column 1
         beq     LB884
         dec     tmp13
         beq     LB889
+.ifdef MACHINE_X16
+	jsr kbd_peek
+.else
         lda     KEYD
+.endif
         cmp     #CSR_DOWN
         bne     LB877
 .ifndef MACHINE_X16 ; one line up = decrement hi byte
@@ -2421,9 +2523,9 @@ LB889:  clc
 get_screen_char:
 .ifdef MACHINE_X16
 verareg =$9f20
-verahi  =verareg+0
+veralo  =verareg+0
 veramid =verareg+1
-veralo  =verareg+2
+verahi  =verareg+2
 veradat =verareg+3
 veradat2=verareg+4
 veractl =verareg+5
@@ -3471,8 +3573,13 @@ cmd_p:
         tax
 LBC11:  jsr     basin_cmp_cr
         bne     syn_err8
-LBC16:  sta     KEYD
-        inc     NDX
+LBC16:
+.ifdef MACHINE_X16
+	jsr kbd_put
+.else
+	sta     KEYD
+	inc     NDX
+.endif
         lda     #4
         cmp     FA
         beq     LBC39 ; printer
@@ -3492,8 +3599,12 @@ LBC39:  lda     LA
         jsr     CLRCH
         lda     #8
         sta     FA
+.ifdef MACHINE_X16
+	jsr kbd_clear
+.else
         lda     #0
         sta     NDX
+.endif
         jmp     input_loop
 
 LBC4C:  stx     zp1
@@ -3506,8 +3617,9 @@ LBC58:  lda     #$2F
         sta     zp2 + 1
         sec
         ldy     zp1
-        .byte   $2C
-LBC60:  sta     zp1 + 1
+        bra     :+
+LBC60  sta     zp1 + 1
+:
         sty     zp1
         inc     zp2 + 1
         tya
@@ -3675,3 +3787,4 @@ LBD8D:  lda     #9
         bcs     LBD8C
         lda     #8
         bne     LBD8A ; always
+.endif

@@ -1,15 +1,18 @@
 	.segment "SERIAL"
+
+sdata = $ffff ; XXX fill for X16
+
 ;command serial bus device to talk
 ;
 talk
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 7
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	ora #$40        ;make a talk adr
-	.byt $2c        ;skip two bytes
+	bra list1       
 
 ;command serial bus device to listen
 ;
@@ -17,11 +20,10 @@ listn
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 6
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	ora #$20        ;make a listen adr
-	jsr rsp232      ;protect self from rs232 nmi's
 list1	pha
 ;
 ;
@@ -47,9 +49,9 @@ list2	pla             ;talk/listen address
 	bne list5
 	jsr clkhi
 ;
-list5	lda d2pra       ;assert attention
+list5	lda sdata       ;assert attention
 	ora #$08
-	sta d2pra
+	sta sdata
 ;
 
 isoura	sei
@@ -81,8 +83,8 @@ noeoi	jsr debpia      ;wait for data high
 	sta count
 ;
 isr01
-	lda d2pra       ;debounce the bus
-	cmp d2pra
+	lda sdata       ;debounce the bus
+	cmp sdata
 	bne isr01
 	asl a           ;set the flags
 	bcc frmerr      ;data must be hi
@@ -97,10 +99,10 @@ isrclk	jsr clkhi       ;clock hi
 	nop
 	nop
 	nop
-	lda d2pra
+	lda sdata
 	and #$ff-$20    ;data high
 	ora #$10        ;clock low
-	sta d2pra
+	sta sdata
 	dec count
 	bne isr01
 	lda #$04        ;set timer for 1ms
@@ -118,7 +120,7 @@ isr04	lda d1icr
 ;
 nodev	;device not present error
 	lda #$80
-	.byt $2c
+	bra csberr
 frmerr	;framing error
 	lda #$03
 csberr	jsr udst        ;commodore serial buss error entry
@@ -133,7 +135,7 @@ secnd
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 0
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	sta bsour       ;buffer character
@@ -141,9 +143,9 @@ secnd
 
 ;release attention after listen
 ;
-scatn	lda d2pra
+scatn	lda sdata
 	and #$ff-$08
-	sta d2pra       ;release attention
+	sta sdata       ;release attention
 	rts
 
 ;talk second address
@@ -152,7 +154,7 @@ tksa
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 1
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	sta bsour       ;buffer character
@@ -174,7 +176,7 @@ ciout
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 3
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	bit c3p0        ;buffered char?
@@ -197,16 +199,16 @@ untlk
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 4
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	sei
 	jsr clklo
-	lda d2pra       ;pull atn
+	lda sdata       ;pull atn
 	ora #$08
-	sta d2pra
+	sta sdata
 	lda #$5f        ;untalk command
-	.byt $2c        ;skip two bytes
+	bra :+
 
 ;send unlisten command on serial bus
 ;
@@ -214,11 +216,11 @@ unlsn
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 5
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	lda #$3f        ;unlisten command
-	jsr list1       ;send it
+:	jsr list1       ;send it
 ;
 ; release all lines
 dlabye	jsr scatn       ;always release atn
@@ -238,7 +240,7 @@ acptr
 .ifdef CBDOS
 	jsr jsrfar
 	.word $c000 + 3 * 2
-	.byte 2
+	.byte BANK_CBDOS
 	rts
 .endif
 	sei             ;no irq allowed
@@ -281,15 +283,15 @@ acp00c	jsr datalo      ;data line low
 acp01	lda #08         ;set up counter
 	sta count
 ;
-acp03	lda d2pra       ;wait for clock high
-	cmp d2pra       ;debounce
+acp03	lda sdata       ;wait for clock high
+	cmp sdata       ;debounce
 	bne acp03
 	asl a           ;shift data into carry
 	bpl acp03       ;clock still low...
 	ror bsour1      ;rotate data in
 ;
-acp03a	lda d2pra       ;wait for clock low
-	cmp d2pra       ;debounce
+acp03a	lda sdata       ;wait for clock low
+	cmp sdata       ;debounce
 	bne acp03a
 	asl a
 	bmi acp03a
@@ -308,32 +310,32 @@ acp04	lda bsour1
 	rts
 ;
 clkhi	;set clock line high (inverted)
-	lda d2pra
+	lda sdata
 	and #$ff-$10
-	sta d2pra
+	sta sdata
 	rts
 ;
 clklo	;set clock line low  (inverted)
-	lda d2pra
+	lda sdata
 	ora #$10
-	sta d2pra
+	sta sdata
 	rts
 ;
 ;
 datahi	;set data line high (inverted)
-	lda d2pra
+	lda sdata
 	and #$ff-$20
-	sta d2pra
+	sta sdata
 	rts
 ;
 datalo	;set data line low  (inverted)
-	lda d2pra
+	lda sdata
 	ora #$20
-	sta d2pra
+	sta sdata
 	rts
 ;
-debpia	lda d2pra       ;debounce the pia
-	cmp d2pra
+debpia	lda sdata       ;debounce the pia
+	cmp sdata
 	bne debpia
 	asl a           ;shift the data bit into the carry...
 	rts             ;...and the clock into neg flag

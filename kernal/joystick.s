@@ -2,22 +2,65 @@
 ; NES & SNES Controller Driver for 6502
 ;----------------------------------------------------------------------
 
-.ifdef C64
-; C64 CIA#2 PB (user port)
-nes_data = $dd01
-nes_ddr  = $dd03
-.else
+.include "../banks.inc"
+.include "../io.inc"
+
+; data
+.import j0tmp, joy0, joy1, joy2; [declare]
+.import save_ram_bank; [declare]
+
+.export joystick_scan, joystick_from_ps2, joystick_get
+
 nes_data = d2pra
 nes_ddr  = d2ddra
-.endif
 
 bit_latch = $08 ; PB3 (user port pin F): LATCH (both controllers)
 bit_data1 = $10 ; PB4 (user port pin H): DATA  (controller #1)
 bit_jclk  = $20 ; PB5 (user port pin J): CLK   (both controllers)
 bit_data2 = $40 ; PB6 (user port pin K): DATA  (controller #2)
 
+.segment "JOYSTICK"
+
+; API
+joystick_scan:
+	KVARS_START
+	jsr _joystick_scan
+	KVARS_END
+	rts
+
+joystick_from_ps2:
+	KVARS_START
+	jsr _joystick_from_ps2
+	KVARS_END
+	rts
+
+joystick_get:
+	KVARS_START
+	tax
+	bne @1       ; -> joy2
+
+; joy1
+	lda joy1
+	ldx joy1+1
+	ldy joy1+2
+	beq @2       ; present
+
+; joy1 not present, return keyboard
+	lda joy0
+	ldx #1       ; type = keyboard
+	ldy #0       ; present
+	bra @2
+
+; joy 2
+@1:	lda joy2
+	ldx joy2+1
+	ldy joy2+2
+
+@2:	KVARS_END
+	rts
+
 ;----------------------------------------------------------------------
-; query_joys:
+; joystick_scan:
 ;
 ; byte 0:      | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
 ;         NES  | A | B |SEL|STA|UP |DN |LT |RT |
@@ -36,7 +79,7 @@ bit_data2 = $40 ; PB6 (user port pin K): DATA  (controller #2)
 ;   0001: keyboard (NES-like)
 ;   1111: SNES
 ; * Note that bits 6 and 7 in byte 0 map to different buttons on NES and SNES.
-query_joysticks:
+_joystick_scan:
 	lda #$ff-bit_data1-bit_data2
 	sta nes_ddr
 	lda #$00
@@ -67,20 +110,14 @@ l1:	lda nes_data
 	inx
 	cpx #3
 	bne l2
+	rts
 
-; if joy1 is not present, use the keyboard instead
-	lda joy1 + 2
-	beq :+
-	lda joy0
-	beq :+       ; keyboard not present
-	sta joy1
-	ldx #1
-	stx joy1 + 1 ; type = keyboard
-	dex
-	stx joy1 + 2 ; present
-:	rts
-
-scancode_to_joystick:
+;----------------------------------------------------------------------
+; joystick_from_ps2:
+;
+;  convert PS/2 scancode into NES joystick state
+;
+_joystick_from_ps2:
 NES_A      = (1 << 7)
 NES_B      = (1 << 6)
 NES_SELECT = (1 << 5)
@@ -89,6 +126,10 @@ NES_UP     = (1 << 3)
 NES_DOWN   = (1 << 2)
 NES_LEFT   = (1 << 1)
 NES_RIGHT  = (1 << 0)
+	ldy joy0   ; init joy0 the first time a key was pressed
+	bne :+     ; this way, XXX can know
+	dec joy0   ; whether a keyboard is attached
+:
 	pha
 	php
 	cpx #0
@@ -129,23 +170,17 @@ NES_RIGHT  = (1 << 0)
 @l3:
 	plp ; C: 0 = down, 1 = up
 	php
-	bcc :+
-	sta 2
-	jsr @l5
-	ora 2
-	bne @l4
-:	eor #$ff
-	sta 2
+	bcc @l5    ; down
+	sta j0tmp
+	lda joy0   ; init joy0 the first time a key was pressed
+	ora j0tmp
+	bra @l4
+@l5:	eor #$ff
+	sta j0tmp
 	lda joy0
-	and 2
+	and j0tmp
 @l4:	sta joy0
 @l2:	plp
 	pla
 	rts
-; init joy0 the first time a key was pressed
-; this way, query_joysticks can know whether a keyboard is attached
-@l5:	lda joy0
-	bne :+
-	lda #$ff
-:	rts
 

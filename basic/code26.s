@@ -23,9 +23,6 @@ inchr	jsr $ffcf
 
 ccall	=$ffe7
 
-settim	=$ffdb
-rdtim	=$ffde
-
 coout	jsr ppach       ; go out to save .a for print# patch
 	bcs erexit
 	rts
@@ -40,14 +37,11 @@ cgetl	jsr $ffe4
 	bcs erexit
 	rts
 
-rdbas	=$fff3
-
 setmsg	=$ff90
 
 plot	=$fff0
 
-csys	jsr frmnum      ;eval formula
-	jsr getadr      ;convert to int. addr
+csys	jsr frmadr      ;get int. addr
 	lda #>csysrz    ;push return address
 	pha
 	lda #<csysrz
@@ -69,7 +63,9 @@ csysrz	=*-1            ;return to here
 	rts             ;return to system
 
 csave	jsr plsv        ;parse parms
-	ldx vartab      ;end save addr
+	bcs nsnerr6
+	jmp snerr6      ;disallow bank/address parms
+nsnerr6	ldx vartab      ;end save addr
 	ldy vartab+1
 	lda #<txttab    ;indirect with start address
 	jsr $ffd8       ;save it
@@ -77,23 +73,28 @@ csave	jsr plsv        ;parse parms
 	rts
 
 cverf	lda #1          ;verify flag
-	.byt $2c        ;skip two bytes
+	bra :+
 
 cload	lda #0          ;load flag
-	sta verck
+:	pha
 	jsr plsv        ;parse parameters
+	bcs cld9
+	ldx andmsk
+	stx $9f61
+cld9	pla
 ;
 cld10	; jsr $ffe1 ;check run/stop
 ; cmp #$ff ;done yet?
 ; bne cld10 ;still bouncing
-	lda verck
-	ldx txttab      ;.x and .y have alt...
-	ldy txttab+1    ;...load address
+	sta verck
+	ldx poker       ;.x and .y have alt...
+	ldy poker+1     ;...load address
 	jsr $ffd5       ;load it
 	bcs jerxit      ;problems
 ;
 	lda verck
-	beq cld50       ;was load
+	cmp #1
+	bne cld50       ;was load
 ;
 ;finish verify
 ;
@@ -122,7 +123,9 @@ cld50	jsr $ffb7       ;read status
 	ldx #erload
 cld55	jmp error
 ;
-cld60	lda txtptr+1
+cld60	lda eormsk
+	bne cld20
+	lda txtptr+1
 	cmp #bufpag     ;direct?
 	bne cld70       ;no...
 ;
@@ -144,6 +147,8 @@ copen	jsr paoc        ;parse statement
 	bcs jerxit      ;bad stuff or memsiz change
 	rts             ;a.o.k.
 
+snerr6	jmp snerr
+
 cclos	jsr paoc        ;parse statement
 	lda andmsk      ;get la
 	jsr $ffc3       ;close it
@@ -154,10 +159,26 @@ jerxit	jmp erexit
 ;
 ;parse load and save commands
 ;
+;[filename[,dev[,relocate]]]
+; or:
+;[filename[,dev[,bank,address]]]
+;
+;if the first form is used:
+;- poker points to the start of basic
+;- the carry flag is set
+;- eormsk contains 0
+;otherwise:
+;- relocate is taken as 0
+;- the bank number is in andmsk
+;- poker contains the specified address
+;- the carry flag is clear
+;- eormsk contains 1
+;
 plsv
 ;default file name
 ;
 	lda #0          ;length=0
+	sta eormsk
 	jsr $ffbd
 ;
 ;default device #
@@ -166,71 +187,83 @@ plsv
 	ldy #0          ;command 0
 	jsr $ffba
 ;
-	jsr paoc20      ;by-pass junk
+;default address
+;
+	lda txttab
+	sta poker
+	lda txttab+1
+	sta poker+1
+;
+	jsr chrgot      ;end of statement?
+	beq plsv30      ;yes
 	jsr paoc15      ;get/set file name
-	jsr paoc20      ;by-pass junk
-	jsr plsv7       ;get ',fa'
+	jsr paoc20      ;quit if no comma
+	jsr getbyt      ;get 'fa'
 	ldy #0          ;command 0
 	stx andmsk
-	jsr $ffba
-	jsr paoc20      ;by-pass junk
-	jsr plsv7       ;get ',sa'
+	jsr paoc19      ;store x,y then maybe quit
+	jsr getbyt      ;get 'sa'
 	txa             ;new command
 	tay
 	ldx andmsk      ;device #
-	jmp $ffba
+	jsr paoc19      ;store x,y then maybe quit
+	sty andmsk      ;bank number
+	ldy #0
+	jsr $ffba
+	jsr frmadr      ;put address in poker
+;
+;eat trailing garbage after address parm
+;
+;	jsr chrgot
+;	beq plsv20
+;plsv10	jsr chrget
+;	bne plsv10
+;
+plsv20	inc eormsk
+plsv30	rts
 
-;look for comma followed by byte
-plsv7	jsr paoc30
-	jmp getbyt
+;store file parms then maybe end
+paoc19	jsr $ffba
 
-;skip return if next char is end
+;quit if there's no comma
 ;
 paoc20	jsr chrgot
-	bne paocx
+	cmp #','
+	beq paoc30
 	pla
 	pla
-paocx	rts
-
-;check for comma and good stuff
-;
-paoc30	jsr chkcom      ;check comma
-paoc32	jsr chrgot      ;get current
-	bne paocx       ;is o.k.
-paoc40	jmp snerr       ;bad...end of line
+	sec
+	rts
+paoc30	jmp chrget
 
 ;parse open/close
 ;
 paoc	lda #0
 	jsr $ffbd       ;default file name
 ;
-	jsr paoc32      ;must got something
+	jsr chrgot
+	beq snerr6      ;must got something
 	jsr getbyt      ;get la
 	stx andmsk
 	txa
 	ldx #1          ;default device
 	ldy #0          ;default command
-	jsr $ffba       ;store it
-	jsr paoc20      ;skip junk
-	jsr plsv7
+	jsr paoc19      ;store x,y then maybe quit
+	jsr getbyt
 	stx eormsk
 	ldy #0          ;default command
 	lda andmsk      ;get la
 	cpx #3
 	bcc paoc5
 	dey             ;default ieee to $ff
-paoc5	jsr $ffba       ;store them
-	jsr paoc20      ;skip junk
-	jsr plsv7       ;get sa
+paoc5	jsr paoc19      ;store x,y then maybe quit
+	jsr getbyt      ;get sa
 	txa
 	tay
 	ldx eormsk
 	lda andmsk
-	jsr $ffba       ;set up real eveything
-paoc7	jsr paoc20
-	jsr paoc30
-paoc15	jsr frmevl
-	jsr frestr      ;length in .a
+	jsr paoc19      ;store x,y then maybe quit
+paoc15	jsr frmstr      ;length in .a
 	ldx index1
 	ldy index1+1
 	jmp $ffbd

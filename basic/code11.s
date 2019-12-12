@@ -75,8 +75,9 @@ lopfn	lda varnam
 	lda varnam+1
 	iny
 	cmp (lowtr),y
-	beq finptr
-	dey
+	bne nfinptr
+	jmp finptr
+nfinptr	dey
 notit	clc
 	lda lowtr
 	adc #6+addprc
@@ -101,9 +102,9 @@ notevl	lda varnam
 	ldy varnam+1
 	cmp #'T'
 	bne qstavr
-	cpy #$c9
+	cpy #'I'+$80
 	beq ldzr
-	cpy #$49
+	cpy #'I'
 	bne qstavr
 gobadv	jmp snerr
 qstavr

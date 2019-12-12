@@ -3,24 +3,24 @@
 ; KLID:   406
 ;
 ; PETSCII characters reachable on a C64 keyboard that are not reachable with this layout:
-; codes: BROWN LIGHT_RED DARK_GRAY LIGHT_GRAY 
-; graph: '\xa4\xa6\xa8\xa9\xba\xc0\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe'
-; ASCII characters reachable with this layout on Windows but not covered by PETSCII:
+; graph: '\xa4\xa6\xa8\xa9\xba'
+; Unicode characters reachable with this layout on Windows but not covered by PETSCII:
 ; '\x1b\x1c\x1d\_{|}~¤§¨´µ½ÅÆØåæø€'
 
 .segment "KBDMETA"
 
-	.byte "DA-DK", 0, 0, 0
+	.byte "DA-DK", 0
 	.word kbtab_406_1-13
 	.word kbtab_406_4-13
 	.word kbtab_406_2-13
+	.word kbtab_406_6-13
 	.word kbtab_406_0
 
 .segment "KBDTABLES"
 
 kbtab_406_0: ; Unshifted
-	.byte $00,$00,$88,$87,$86,$85,$89,$00
-	.byte $00,$00,$8c,$8b,$8a,$09,'_',$00
+	.byte $00,$10,$88,$87,$86,$85,$89,$17
+	.byte $00,$15,$8c,$8b,$8a,$09,'_',$00
 	.byte $00,$00,$00,$00,$00,'Q','1',$00
 	.byte $00,$00,'Z','S','A','W','2',$00
 	.byte $00,'C','X','D','E','4','3',$00
@@ -34,7 +34,7 @@ kbtab_406_0: ; Unshifted
 	.byte $00,'<',$00,$00,$00,$00,$14,$00
 	.byte $00,$00,$00,$00,$00,$00,$00,$00
 	.byte $00,',',$00,$00,$00,$00,$00,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	.byte $16,$00,$00,$00,$00,$00,$00,$00
 kbtab_406_1: ; Shft 
 	.byte $18,$de,$00
 	.byte $00,$00,$00,$00,$00,$d1,'!',$00
@@ -64,13 +64,26 @@ kbtab_406_2: ; Ctrl
 kbtab_406_4: ; Alt 
 	.byte $18,$00,$00
 	.byte $00,$00,$00,$00,$00,$ab,$81,$00
-	.byte $00,$00,$ad,$ae,$b0,$b3,'@',$00
-	.byte $00,$bc,$bd,$ac,$b1,'$','\',$00
+	.byte $00,$00,$ad,$ae,$b0,$b3,$95,$00
+	.byte $00,$bc,$bd,$ac,$b1,$97,$96,$00
 	.byte $00,$a0,$be,$bb,$a3,$b2,$98,$00
 	.byte $00,$aa,$bf,$b4,$a5,$b7,$99,$00
-	.byte $00,$00,$a7,$b5,$b8,$9a,'[',$00
-	.byte $00,$00,$a1,$a2,$b9,$00,']',$00
+	.byte $00,$00,$a7,$b5,$b8,$9a,$9b,$00
+	.byte $00,$00,$a1,$a2,$b9,$00,$00,$00
 	.byte $00,$00,$00,$b6,$00,$af,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$8d,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,$94,$00
+kbtab_406_6: ; AltGr 
+	.byte $18,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,'@',$00
+	.byte $00,$00,$00,$00,$00,'$','\',$00
+	.byte $00,$a0,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,'[',$00
+	.byte $00,$00,$00,$00,$00,$00,']',$00
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
 	.byte $00,$00,$00,$00,$00,$00,$00,$00
 	.byte $00,$00,$8d,$00,$00,$00,$00,$00
 	.byte $00,$00,$00,$00,$00,$00,$94,$00
